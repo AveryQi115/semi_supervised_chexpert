@@ -1,0 +1,17 @@
+*.log
+*.pyc
+.idea
+*.so
+*.egg
+_ext*
+__pycache__
+dist
+build
+*.swp
+*.json
+*.pth
+*.out
+*.sh
+*.pkl
+*cluster*
+*change*

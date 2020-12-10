@@ -1,0 +1,65 @@
+NAME: 'dist_b4_bmls120_accv'
+OUTPUT_DIR: '/data/output/icpr'
+SHOW_STEP: 50
+SAVE_STEP: 5
+VALID_STEP: -1
+INPUT_SIZE: (360, 360)
+COLOR_SPACE: 'RGB'
+CPU_MODE: False
+
+DATASET:
+  DATASET: 'iNaturalist'
+  DATA_TYPE: 'nori'
+  TRAIN_JSON: '/data/dataset/webFG/train_bbn.json'
+  VALID_JSON: '/data/dataset/webFG/test_bbn.json'
+
+BACKBONE:
+  TYPE: 'efficient_b4'
+  PRETRAINED_MODEL: '/home/zhaobingchen/.torch/models/efficientnet-b4.pth'
+
+MODULE:
+  TYPE: 'GAP'
+
+LOSS:
+  LOSS_TYPE: 'CrossEntropyLabelSmooth'
+
+CLASSIFIER:
+  TYPE: 'FC'
+  BIAS: True
+
+TRAIN:
+  BATCH_SIZE: 32
+  MAX_EPOCH: 30
+  NUM_WORKERS: 16
+  COMBINER:
+    TYPE: 'mix_up'
+  TENSORBOARD:
+    ENABLE: False
+  SAMPLER:
+    TYPE: 'default'
+    DUAL_SAMPLER:
+      ENABLE: True
+      TYPE: 'reverse'
+  OPTIMIZER:
+    TYPE: 'SGD'
+    BASE_LR: 0.05
+    MOMENTUM: 0.9
+    WEIGHT_DECAY: 1e-4
+  LR_SCHEDULER:
+    TYPE: 'cosine'
+
+    # LR_STEP: [20, 25]
+    # LR_FACTOR: 0.1
+    # WARM_EPOCH: 5
+  DISTRIBUTED: True
+  SYNCBN: True
+
+TRANSFORMS:
+  TRAIN_TRANSFORMS: ("random_resized_crop", "random_horizontal_flip")
+  TEST_TRANSFORMS: ("shorter_resize_for_crop", "center_crop")
+
+TEST:
+  BATCH_SIZE: 128
+  NUM_WORKERS: 16
+  MODEL_FILE: '/home/BBN/models/BBN.iNaturalist2019.res50.180epoch.best_model.pth'
+
