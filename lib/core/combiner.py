@@ -117,7 +117,7 @@ class Combiner:
         loss = criterion(output, label)
         now_result = torch.sigmoid(output).ge(0.5).float()
         now_acc = (now_result == label).sum()/label.shape[0]/label.shape[1]
-        return loss, now_acc
+        return loss, now_acc, output
 
     def coteaching(self,model,criterion,image,label,meta,**kwargs):
         model1, model2 = model

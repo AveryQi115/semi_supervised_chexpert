@@ -11,9 +11,9 @@ class CheXpert(BaseSet):
         super().__init__(mode, cfg, transform)
         random.seed(0)
 
-        transform_uncertain = [{"nan":0,0:0,1:0,-1:0},
-                                {"nan":0,0:0,1:0,-1:1},
-                                {"nan":0,0:0,1:0,-1:-1}]
+        transform_uncertain = [{"nan":0,0:0,1:1,-1:0},
+                                {"nan":0,0:0,1:1,-1:1},
+                                {"nan":0,0:0,1:1,-1:-1}]
         if cfg.DATASET.UNCERTAIN == "U-positive":
             self.transform_dict = transform_uncertain[1]
         elif cfg.DATASET.UNCERTAIN == "U-negative":

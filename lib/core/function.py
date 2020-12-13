@@ -9,8 +9,13 @@ from apex.parallel import DistributedDataParallel as DDP
 from apex.fp16_utils import *
 from apex import amp, optimizers
 from apex.multi_tensor_apply import multi_tensor_applier
+from ignite.contrib.metrics import ROC_AUC
 import ipdb
 
+def activated_output_transform(output):
+    y_pred, y = output
+    y_pred = torch.sigmoid(y_pred)
+    return y_pred, y
 
 def train_model_for_coteaching(trainLoader,
     model1,
@@ -133,6 +138,10 @@ def train_model(
     else:
         model.train()
 
+    if cfg.TRAIN.METRIC == 'auc':
+        roc_auc = ROC_AUC(activated_output_transform)
+        roc_auc.reset()
+
     combiner.reset_epoch(epoch)
 
     if cfg.LOSS.LOSS_TYPE in ['LDAMLoss', 'CSCE']:
@@ -146,7 +155,7 @@ def train_model(
     for i, (image, label, meta) in enumerate(trainLoader):
         cnt = label.shape[0]
         # ipdb.set_trace()
-        loss, now_acc = combiner.forward(model, criterion, image, label, meta)
+        loss, now_acc, output = combiner.forward(model, criterion, image, label, meta)
 
         optimizer.zero_grad()
         if cfg.TRAIN.DISTRIBUTED:
@@ -162,18 +171,42 @@ def train_model(
         all_loss.update(loss.data.item(), cnt)
         acc.update(now_acc, cnt)
 
-        if i % cfg.SHOW_STEP == 0 and rank == 0:
-            pbar_str = "Epoch:{:>3d}  Batch:{:>3d}/{}  Batch_Loss:{:>5.3f}  Batch_Accuracy:{:>5.2f}%     ".format(
-                epoch, i, number_batch, all_loss.val, acc.val * 100
-            )
+        if cfg.TRAIN.METRIC == 'acc':
+
+            if i % cfg.SHOW_STEP == 0 and rank == 0:
+                pbar_str = "Epoch:{:>3d}  Batch:{:>3d}/{}  Batch_Loss:{:>5.3f}  Batch_Accuracy:{:>5.2f}%     ".format(
+                    epoch, i, number_batch, all_loss.val, acc.val * 100
+                )
+                logger.info(pbar_str)
+
+        # for a more robust way to compute auc, do not compute it per batch but per epoch
+        # because if there is only one kind of target in a batch for a class
+        # the computation of auc will result in an error
+        if cfg.TRAIN.METRIC == 'auc':
+            roc_auc.update((output.data,label.data))
+            if i % cfg.SHOW_STEP == 0 and rank == 0:
+                pbar_str = "Epoch:{:>3d}  Batch:{:>3d}/{}  Batch_Loss:{:>5.3f}  Batch_Accuracy:{:>5.2f}%     ".format(
+                    epoch, i, number_batch, all_loss.val, acc.val * 100
+                )
+                logger.info(pbar_str)
+
+    if cfg.TRAIN.METRIC == 'acc':
+        end_time = time.time()
+        pbar_str = "---Epoch:{:>3d}/{}   Avg_Loss:{:>5.3f}   Epoch_Accuracy:{:>5.2f}%   Epoch_Time:{:>5.2f}min---".format(
+            epoch, epoch_number, all_loss.avg, acc.avg * 100, (end_time - start_time) / 60
+        )
+        if rank == 0:
             logger.info(pbar_str)
-    end_time = time.time()
-    pbar_str = "---Epoch:{:>3d}/{}   Avg_Loss:{:>5.3f}   Epoch_Accuracy:{:>5.2f}%   Epoch_Time:{:>5.2f}min---".format(
-        epoch, epoch_number, all_loss.avg, acc.avg * 100, (end_time - start_time) / 60
-    )
-    if rank == 0:
-        logger.info(pbar_str)
-    return acc.avg, all_loss.avg
+        return acc.avg, all_loss.avg
+
+    if cfg.TRAIN.METRIC == 'auc':
+        end_time = time.time()
+        pbar_str = "---Epoch:{:>3d}/{}   Avg_Loss:{:>5.3f}   Epoch_Auc:{:>5.2f}%   Epoch_Time:{:>5.2f}min---".format(
+            epoch, epoch_number, all_loss.avg, roc_auc.compute(), (end_time - start_time) / 60
+        )
+        if rank == 0:
+            logger.info(pbar_str)
+        return roc_auc.compute(), all_loss.avg
 
 def valid_model_for_coteaching(
     dataLoader, epoch_number, model1, model2, cfg, criterion, logger, device, rank, **kwargs
@@ -238,6 +271,10 @@ def valid_model(
         return valid_model_for_coteaching(dataLoader, epoch_number, model1, model2, cfg, criterion, logger, device, rank, **kwargs)
     
     model.eval()
+    if cfg.TRAIN.METRIC == 'auc':
+        roc_auc = ROC_AUC(activated_output_transform)
+        roc_auc.reset()
+
     num_classes = dataLoader.dataset.get_num_classes()
     if cfg.TRAIN.COMBINER.TYPE != 'multi_label':
         fusion_matrix = FusionMatrix(num_classes)
@@ -271,9 +308,23 @@ def valid_model(
                 now_acc, cnt = accuracy(now_result.cpu().numpy(), label.cpu().numpy())
             acc.update(now_acc, cnt)
 
-        pbar_str = "------- Valid: Epoch:{:>3d}  Valid_Loss:{:>5.3f}   Valid_Acc:{:>5.2f}%-------".format(
-            epoch_number, all_loss.avg, acc.avg * 100
-        )
-        if rank == 0:
-            logger.info(pbar_str)
-    return acc.avg, all_loss.avg
+            if cfg.TRAIN.METRIC == 'auc':
+                roc_auc.update((output.data,label.data))
+
+        if cfg.TRAIN.METRIC =='acc':
+            pbar_str = "------- Valid: Epoch:{:>3d}  Valid_Loss:{:>5.3f}   Valid_Acc:{:>5.2f}%-------".format(
+                epoch_number, all_loss.avg, acc.avg * 100
+            )
+            if rank == 0:
+                logger.info(pbar_str)
+
+        return acc.avg, all_loss.avg
+
+        if cfg.TRAIN.METRIC =='auc':
+            pbar_str = "------- Valid: Epoch:{:>3d}  Valid_Loss:{:>5.3f}   Valid_Auc:{:>5.2f}%-------".format(
+                epoch_number, all_loss.avg, roc_auc.compute()
+            )
+            if rank == 0:
+                logger.info(pbar_str)
+
+        return roc_auc.compute(), all_loss.avg
