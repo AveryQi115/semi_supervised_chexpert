@@ -138,9 +138,14 @@ def train_model(
     else:
         model.train()
 
+    num_classes = trainLoader.dataset.get_num_classes()
     if cfg.TRAIN.METRIC == 'auc':
         roc_auc = ROC_AUC(activated_output_transform)
         roc_auc.reset()
+        roc_auc_list = []
+        for i in range(num_classes):
+            roc_auc_list.append(ROC_AUC(activated_output_transform))
+            roc_auc_list[-1].reset()
 
     combiner.reset_epoch(epoch)
 
@@ -184,11 +189,21 @@ def train_model(
         # the computation of auc will result in an error
         if cfg.TRAIN.METRIC == 'auc':
             roc_auc.update((output.data,label.data))
+            for j in range(num_classes):
+                roc_auc_list[j].update((output.data[:,j],label.data[:,j]))
+
             if i % cfg.SHOW_STEP == 0 and rank == 0:
                 pbar_str = "Epoch:{:>3d}  Batch:{:>3d}/{}  Batch_Loss:{:>5.3f}  Batch_Accuracy:{:>5.2f}%     ".format(
                     epoch, i, number_batch, all_loss.val, acc.val * 100
                 )
                 logger.info(pbar_str)
+                # # this is for testing
+                # for j in range(num_classes):
+                #     pbar_str = "------- Valid: Epoch:{:>3d}  Category_id:{:>3d}   Valid_Auc:{:>5.2f}%-------".format(
+                #         epoch_number, j, roc_auc_list[j].compute()
+                #     )
+                #     logger.info(pbar_str)
+
 
     if cfg.TRAIN.METRIC == 'acc':
         end_time = time.time()
@@ -206,6 +221,13 @@ def train_model(
         )
         if rank == 0:
             logger.info(pbar_str)
+        for j in range(num_classes):
+            pbar_str = "------- Valid: Epoch:{:>3d}  Category_id:{:>3d}   Valid_Auc:{:>5.2f}%-------".format(
+                epoch_number, j, roc_auc_list[j].compute()
+            )
+            if rank == 0:
+                logger.info(pbar_str)
+
         return roc_auc.compute(), all_loss.avg
 
 def valid_model_for_coteaching(
@@ -262,20 +284,23 @@ def valid_model_for_coteaching(
     return acc1.avg, all_loss1.avg, acc2.avg, all_loss2.avg
 
 
-
 def valid_model(
     dataLoader, epoch_number, model, cfg, criterion, logger, device, rank, **kwargs
 ):
     if cfg.TRAIN.COMBINER.TYPE == 'coteaching':
         model1, model2 = model
         return valid_model_for_coteaching(dataLoader, epoch_number, model1, model2, cfg, criterion, logger, device, rank, **kwargs)
-    
+    num_classes = dataLoader.dataset.get_num_classes()
+
     model.eval()
     if cfg.TRAIN.METRIC == 'auc':
         roc_auc = ROC_AUC(activated_output_transform)
         roc_auc.reset()
+        roc_auc_list = []
+        for i in range(num_classes):
+            roc_auc_list.append(ROC_AUC(activated_output_transform))
+            roc_auc_list[-1].reset()
 
-    num_classes = dataLoader.dataset.get_num_classes()
     if cfg.TRAIN.COMBINER.TYPE != 'multi_label':
         fusion_matrix = FusionMatrix(num_classes)
 
@@ -310,6 +335,8 @@ def valid_model(
 
             if cfg.TRAIN.METRIC == 'auc':
                 roc_auc.update((output.data,label.data))
+                for i in range(num_classes):
+                    roc_auc_list[i].update((output.data[:,i],label.data[:,i]))
 
         if cfg.TRAIN.METRIC =='acc':
             pbar_str = "------- Valid: Epoch:{:>3d}  Valid_Loss:{:>5.3f}   Valid_Acc:{:>5.2f}%-------".format(
@@ -317,8 +344,7 @@ def valid_model(
             )
             if rank == 0:
                 logger.info(pbar_str)
-
-        return acc.avg, all_loss.avg
+            return acc.avg, all_loss.avg
 
         if cfg.TRAIN.METRIC =='auc':
             pbar_str = "------- Valid: Epoch:{:>3d}  Valid_Loss:{:>5.3f}   Valid_Auc:{:>5.2f}%-------".format(
@@ -327,4 +353,11 @@ def valid_model(
             if rank == 0:
                 logger.info(pbar_str)
 
-        return roc_auc.compute(), all_loss.avg
+            for i in range(num_classes):
+                pbar_str = "------- Valid: Epoch:{:>3d}  Category_id:{:>3d}   Valid_Auc:{:>5.2f}%-------".format(
+                    epoch_number, i, roc_auc_list[i].compute()
+                )
+                if rank == 0:
+                    logger.info(pbar_str)
+
+            return roc_auc.compute(), all_loss.avg

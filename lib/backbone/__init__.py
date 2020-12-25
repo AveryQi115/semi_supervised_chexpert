@@ -6,6 +6,6 @@ from .resnet_sw_mish import res50_sw_mish
 
 
 from .resnest_b import resnest50_b, resnest101_b, resnest200_b
-
+from .densenet import dense121
 from .efficientnet import efficient_b3, efficient_b4, efficient_b5, efficient_b6
 

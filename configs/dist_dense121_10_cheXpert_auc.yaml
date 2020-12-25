@@ -1,0 +1,55 @@
+NAME: 'dist_dense121_10_CheXpert.yaml'
+OUTPUT_DIR: '/home/432/qihaoyu/data/ChestRay_exp/baseline_small/U-positive-auc'
+SHOW_STEP: 1
+SAVE_STEP: 1
+VALID_STEP: 1
+INPUT_SIZE: (320, 320)
+CPU_MODE: False
+COLOR_SPACE: GRAYSCALE
+
+DATASET:
+  DATASET: 'CheXpert'
+  DATA_TYPE: 'jpg'
+  UNCERTAIN: 'U-positive'
+  TRAIN_JSON: '/home/432/qihaoyu/vscode_workspace/accv_cls/CheXpert-small-5cat-train.json'
+  VALID_JSON: '/home/432/qihaoyu/vscode_workspace/accv_cls/CheXpert-small-5cat-valid.json'
+
+LOSS:
+  LOSS_TYPE: 'BCEWithLogitsLoss'
+
+MODULE:
+  TYPE: 'GAP'
+
+BACKBONE:
+  TYPE: 'dense121'
+  PRETRAINED_MODEL: ""
+  #PRETRAINED_MODEL: "/home/432/qihaoyu/data/ChestRay_exp/baseline_small/U-positive-auc/dist_r50_10_CheXpert.yaml/models/2020-12-13-07-19/epoch_3.pth"
+
+TRAIN:
+  BATCH_SIZE: 16
+  MAX_EPOCH: 10
+  NUM_WORKERS: 10
+  SHUFFLE: True
+  METRIC: 'auc'
+  COMBINER:
+    TYPE: 'multi_label'
+  TENSORBOARD:
+    ENABLE: False
+  SAMPLER:
+    TYPE: 'default'
+    DUAL_SAMPLER:
+      ENABLE: False
+      TYPE: 'reverse'
+  OPTIMIZER:
+    TYPE: 'ADAM'
+    BASE_LR: 1e-4
+    MOMENTUM: 0.9
+  LR_SCHEDULER:
+    TYPE: 'cosine'
+    DECAY_ETA_MIN: 1e-6
+  DISTRIBUTED: True
+  SYNCBN: True
+
+TRANSFORMS:
+  TRAIN_TRANSFORMS: ("random_resized_crop",)
+  TEST_TRANSFORMS: ("center_crop",)

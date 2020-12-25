@@ -76,11 +76,11 @@ def get_scheduler(cfg, optimizer):
     elif cfg.TRAIN.LR_SCHEDULER.TYPE == "cosine":
         if cfg.TRAIN.LR_SCHEDULER.COSINE_DECAY_END > 0:
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=cfg.TRAIN.LR_SCHEDULER.COSINE_DECAY_END, eta_min=1e-4
+                optimizer, T_max=cfg.TRAIN.LR_SCHEDULER.COSINE_DECAY_END, eta_min=cfg.TRAIN.LR_SCHEDULER.DECAY_ETA_MIN
             )
         else:
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=cfg.TRAIN.MAX_EPOCH, eta_min=1e-4
+                optimizer, T_max=cfg.TRAIN.MAX_EPOCH, eta_min=cfg.TRAIN.LR_SCHEDULER.DECAY_ETA_MIN
             )
     elif cfg.TRAIN.LR_SCHEDULER.TYPE == "warmup":
         scheduler = WarmupMultiStepLR(
@@ -117,9 +117,15 @@ def get_category_list(annotations, num_classes, cfg):
     cat_list = []
     print("Weight List has been produced")
     if cfg.DATASET.DATASET == 'CheXpert':
-        negative_list = {'No Finding':0,'Enlarged Cardiomediastinum':0,'Cardiomegaly':0,'Lung Opacity':0,'Lung Lesion':0,'Edema':0,'Consolidation':0,'Pneumonia':0,'Atelectasis':0,'Pneumothorax':0,'Pleural Effusion':0,'Pleural Other':0,'Fracture':0,'Support Devices':0}
-        positive_list = {'No Finding':0,'Enlarged Cardiomediastinum':0,'Cardiomegaly':0,'Lung Opacity':0,'Lung Lesion':0,'Edema':0,'Consolidation':0,'Pneumonia':0,'Atelectasis':0,'Pneumothorax':0,'Pleural Effusion':0,'Pleural Other':0,'Fracture':0,'Support Devices':0}
+        negative_list = dict()
+        positive_list = dict()
         cat_list = []
+
+        # initialize dict
+        for key in annotations[0].keys():
+            positive_list[key] = 0
+            negative_list[key] = 0
+
         for anno in annotations:
             cat = []
             for key in anno.keys():

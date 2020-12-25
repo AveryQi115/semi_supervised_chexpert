@@ -6,7 +6,9 @@ from backbone import res50_ibn, bbn_res50_ibn
 from backbone import res50_sw, res50_sw_mish
 from backbone import resnest50_b, resnest200_b, resnest101_b
 from backbone import efficient_b6, efficient_b3, efficient_b4, efficient_b5
+from backbone import dense121
 from modules import GAP, Identity, FCNorm
+import ipdb
 
 
 class Network(nn.Module):
@@ -29,8 +31,10 @@ class Network(nn.Module):
             pretrained_model=cfg.BACKBONE.PRETRAINED_MODEL,
             last_layer_stride=1,
         )
-        if cfg.COLOR_SPACE == 'GRAYSCALE':
-            self.backbone.conv1 = nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+        # if cfg.COLOR_SPACE == 'GRAYSCALE':
+        #     self.backbone.conv1 = nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+        #     if cfg.BACKBONE.PRETRAINED_MODEL != "":
+        #         self.backbone.load_state_dict(torch.load(cfg.BACKBONE.PRETRAINED_MODEL, map_location='cpu'))
         self.module = self._get_module()
         self.classifier = self._get_classifer()
         self.feature_len = self.get_feature_length()
@@ -43,6 +47,7 @@ class Network(nn.Module):
             return self.classifier(x)
 
         x = self.backbone(x)
+        # ipdb.set_trace()
         x = self.module(x)
         x = x.view(x.shape[0], -1)
 
@@ -97,6 +102,8 @@ class Network(nn.Module):
             num_features = 1792
         elif 'b6' in self.cfg.BACKBONE.TYPE:
             num_features = 2304
+        elif 'dense121' in self.cfg.BACKBONE.TYPE:
+            num_features = 1024
         else:
             num_features = 2048
 

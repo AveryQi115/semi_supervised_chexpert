@@ -11,16 +11,6 @@ class CheXpert(BaseSet):
         super().__init__(mode, cfg, transform)
         random.seed(0)
 
-        transform_uncertain = [{"nan":0,0:0,1:1,-1:0},
-                                {"nan":0,0:0,1:1,-1:1},
-                                {"nan":0,0:0,1:1,-1:-1}]
-        if cfg.DATASET.UNCERTAIN == "U-positive":
-            self.transform_dict = transform_uncertain[1]
-        elif cfg.DATASET.UNCERTAIN == "U-negative":
-            self.transform_dict == transform_uncertain[0]
-        elif cfg.DATASET.UNCERTAIN == "U-ignore":
-            self.transform_dict == transform_uncertain[2]
-
         if self.dual_sample or (self.cfg.TRAIN.SAMPLER.TYPE == "weighted sampler" and mode=="train"):
             self.class_weight, self.sum_weight = self.get_weight(self.data, self.num_classes)
             self.class_dict = self._get_class_dict()
@@ -31,9 +21,8 @@ class CheXpert(BaseSet):
         img = cv2.equalizeHist(img)
         img = cv2.GaussianBlur(img,(3,3),0)
         image = self.transform(img)
-        assert image.shape == (1,320,320), f'image.shape={image.shape}'
+        assert image.shape == (1,1024,1024), f'image.shape={image.shape}'
         label = self._get_label(now_info)
-        # meta = self._get_meta(now_info)
         meta = dict()
         return image, label, meta
 
@@ -59,8 +48,8 @@ class CheXpert(BaseSet):
     def _get_label(self,now_info):
         label = []
         for key in now_info.keys():
-            if key in ['No Finding','Enlarged Cardiomediastinum','Cardiomegaly','Lung Opacity','Lung Lesion','Edema','Consolidation','Pneumonia','Atelectasis','Pneumothorax','Pleural Effusion','Pleural Other','Fracture','Support Devices']:
-                label.append(self.transform_dict[now_info[key]])
+            if key != 'path':
+                label.append(now_info[key])
         label = np.array(label)
         assert label.shape == (self.num_classes,)
         return label
@@ -83,7 +72,7 @@ class CheXpert(BaseSet):
         for anno in self.data:
             clean_anno_dict=dict()
             for key in anno.keys():
-                if key not in ['path','Sex','Age','Frontal/Lateral','AP/PA']:
-                    clean_anno_dict[key] = self.transform_dict[anno[key]]
+                if key not in ['path']:
+                    clean_anno_dict[key] = anno[key]
             clean_anno.append(clean_anno_dict)
         return clean_anno
